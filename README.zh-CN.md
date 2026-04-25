@@ -37,6 +37,15 @@ mocker exec -it my-app sh
 
 ## 最新更新
 
+### v0.2.1 — 嵌套虚拟化
+- **`--virtualization` / `--kernel`** 适用于 `mocker run` 和 `mocker create` — 向容器暴露嵌套虚拟化能力（closes #4）
+
+### v0.2.0 — Ground Truth
+- **诚实层** — 不支持的命令返回明确错误，不再静默修改本地状态
+- **安全**：修复 `copyToContainer` 和 compose 主机名注入中的 shell 注入漏洞
+- 在 `run`（`-i`、`-t`、`--cidfile`、`--rm`、`--platform` 等）和 `build`（`--label`、`--quiet`、`--progress`、`--output`）中转发 Apple CLI 参数
+- 测试基础设施：`ProcessRunner` 协议 + 16 个新测试（共 42 个）
+
 ### v0.1.9 — 完整 Docker CLI 参数兼容
 - **111 个命令/子命令**与 Docker 参数匹配
 - `run`/`create`：新增约 50 个参数（`--attach`、`--cpu-shares`、`--gpus`、`--init`、`--memory`、`--privileged`、`--restart`、`--shm-size`、`--ulimit` 等）
