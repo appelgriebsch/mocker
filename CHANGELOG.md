@@ -5,6 +5,29 @@ All notable changes to Mocker are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-28
+
+### Added
+- Forward Apple CLI flags in `mocker run`: `-i`, `-t`, `-c`, `-m`, `--label`, `--cidfile`, `--rm`, `--tmpfs`, `--dns-search`, `--dns-option`, `--platform`
+- Forward Apple CLI flags in `mocker build`: `--label`, `--quiet`, `--progress`, `--output`
+- `ProcessRunner` protocol and `MockProcessRunner` actor for testability
+- 16 new tests (42 total, was 26): `ContainerEngine`, `ComposeOrchestrator`, and flag enforcement coverage
+
+### Changed
+- **BREAKING:** `mocker create`, `rename`, `pause`, `unpause` now return explicit unsupported errors instead of silently mutating local metadata
+- **BREAKING:** `mocker login` / `logout` now return unsupported error (credentials were never consumed by pull/push)
+- Unsupported flags in `mocker run` now produce stderr warnings
+- Hostname parser now uses the assigned name instead of the inspect hostname field
+- All version strings unified via `Version.currentVersion`
+- Volume list prunes stale entries where `_data/` directory no longer exists
+- Feature claims qualified across READMEs ("Docker CLI compatible" not "full compatibility")
+- 12 commands marked `[unsupported]` in COMMANDS.md
+
+### Security
+- Fix shell injection in `copyToContainer` — replaced `sh -c` with stdin pipe to `tee`
+- Fix shell injection in compose hostname injection — same pattern
+- Fix pipe-buffer deadlock in both paths (async `terminationHandler` instead of blocking `waitUntilExit`)
+
 ## [0.1.9] - 2026-03-14
 
 ### Added
