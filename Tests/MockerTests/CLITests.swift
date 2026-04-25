@@ -17,4 +17,20 @@ struct CLITests {
         #expect(command.envFile == "test.env")
         #expect(command.image == "alpine")
     }
+
+    @Test("Run command accepts nested virtualization flags")
+    func runVirtualizationFlags() throws {
+        let command = try Run.parse(["--virtualization", "--kernel", "/tmp/vmlinux", "ubuntu:latest"])
+        #expect(command.virtualization == true)
+        #expect(command.kernel == "/tmp/vmlinux")
+        #expect(command.image == "ubuntu:latest")
+    }
+
+    @Test("Create command accepts nested virtualization flags")
+    func createVirtualizationFlags() throws {
+        let command = try Create.parse(["--virtualization", "--kernel", "/tmp/vmlinux", "ubuntu:latest"])
+        #expect(command.virtualization == true)
+        #expect(command.kernel == "/tmp/vmlinux")
+        #expect(command.image == "ubuntu:latest")
+    }
 }

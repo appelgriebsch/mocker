@@ -61,6 +61,12 @@ struct Run: AsyncParsableCommand {
     @Option(name: .long, help: "Set platform (e.g. linux/amd64, linux/arm64)")
     var platform: String?
 
+    @Flag(name: .long, help: "Expose nested virtualization capabilities to the container")
+    var virtualization = false
+
+    @Option(name: .long, help: "Linux kernel image to use for the container VM")
+    var kernel: String?
+
     @Option(name: .long, help: "Pull image before running (\"always\", \"missing\", \"never\")")
     var pull: String = "missing"
 
@@ -395,6 +401,8 @@ struct Run: AsyncParsableCommand {
             user: user,
             entrypoint: entrypoint,
             platform: platform,
+            virtualization: virtualization,
+            kernel: kernel,
             dns: dns,
             addHost: addHost,
             privileged: privileged,

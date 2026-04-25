@@ -41,6 +41,8 @@ mocker run [OPTIONS] IMAGE [COMMAND [ARG...]]
     --restart         Restart policy (no|always|on-failure|unless-stopped)
     --network         Connect to a network
     --rm              Remove the container when it exits
+    --virtualization  Expose nested virtualization capabilities to the container
+    --kernel          Linux kernel image to use for the container VM
 ```
 
 **Examples:**
@@ -56,6 +58,9 @@ mocker run -d -v /host/config:/app/config:ro myapp:latest
 
 # With restart policy
 mocker run -d --restart always --name db postgres:15
+
+# With nested virtualization and a custom virtualization-capable kernel
+mocker run --virtualization --kernel /path/to/vmlinux ubuntu:latest
 ```
 
 ---

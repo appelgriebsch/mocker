@@ -14,12 +14,22 @@ public actor ContainerEngine {
     private let store: ContainerStore
     private let portProxy: PortProxy
 
-    private static let containerCLI = "/usr/local/bin/container"
+    private static let containerCLI = resolveContainerCLI()
 
     public init(config: MockerConfig = MockerConfig()) throws {
         self.config = config
         self.store = try ContainerStore(path: config.containersPath)
         self.portProxy = PortProxy(proxiesDir: config.proxiesPath)
+    }
+
+    static func resolveContainerCLI(fileManager: FileManager = .default) -> String {
+        let candidates = [
+            "/opt/homebrew/bin/container",
+            "/opt/homebrew/opt/container/bin/container",
+            "/usr/local/bin/container",
+        ]
+
+        return candidates.first { fileManager.isExecutableFile(atPath: $0) } ?? "/usr/local/bin/container"
     }
 
     // MARK: - Create (without starting)
@@ -41,7 +51,35 @@ public actor ContainerEngine {
             throw MockerError.containerAlreadyExists(existing.name)
         }
 
-        // Build `container run` arguments
+        let args = Self.buildRunArguments(name: name, config: containerConfig)
+
+        let (output, exitCode) = try await runCLI(args)
+
+        guard exitCode == 0 else {
+            let msg = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw MockerError.operationFailed(msg.isEmpty ? "container run failed" : msg)
+        }
+
+        // output is the container ID/name
+        let assignedID = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Fetch real state from the container CLI
+        let info = try await fetchContainerInfo(id: assignedID, name: name, config: containerConfig)
+        try await store.save(info)
+
+        // Start port proxies if -p mappings were requested and we got an IP
+        if !containerConfig.ports.isEmpty, !info.networkAddress.isEmpty {
+            try? await portProxy.start(
+                containerID: info.id,
+                ports: containerConfig.ports,
+                containerIP: info.networkAddress
+            )
+        }
+
+        return info
+    }
+
+    static func buildRunArguments(name: String, config containerConfig: ContainerConfig) -> [String] {
         var args = ["run"]
 
         args += ["--name", name]
@@ -121,6 +159,14 @@ public actor ContainerEngine {
             if parts.count >= 2 { args += ["--arch", String(parts[1])] }
         }
 
+        if containerConfig.virtualization {
+            args.append("--virtualization")
+        }
+
+        if let kernel = containerConfig.kernel, !kernel.isEmpty {
+            args += ["--kernel", kernel]
+        }
+
         // Detach by default unless interactive
         if !containerConfig.interactive {
             args += ["-d"]
@@ -128,31 +174,7 @@ public actor ContainerEngine {
 
         args.append(containerConfig.image)
         args += containerConfig.command
-
-        let (output, exitCode) = try await runCLI(args)
-
-        guard exitCode == 0 else {
-            let msg = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw MockerError.operationFailed(msg.isEmpty ? "container run failed" : msg)
-        }
-
-        // output is the container ID/name
-        let assignedID = output.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Fetch real state from the container CLI
-        let info = try await fetchContainerInfo(id: assignedID, name: name, config: containerConfig)
-        try await store.save(info)
-
-        // Start port proxies if -p mappings were requested and we got an IP
-        if !containerConfig.ports.isEmpty, !info.networkAddress.isEmpty {
-            try? await portProxy.start(
-                containerID: info.id,
-                ports: containerConfig.ports,
-                containerIP: info.networkAddress
-            )
-        }
-
-        return info
+        return args
     }
 
     // MARK: - List

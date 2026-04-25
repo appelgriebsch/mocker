@@ -51,6 +51,8 @@ mocker run [OPTIONS] IMAGE [COMMAND...]
 | `--user` | `-u` | Username or UID (format: name\|uid[:group\|gid]) |
 | `--entrypoint` | | Overwrite the default ENTRYPOINT of the image |
 | `--platform` | | Set platform (e.g. linux/amd64, linux/arm64) |
+| `--virtualization` | | Expose nested virtualization capabilities to the container |
+| `--kernel` | | Linux kernel image to use for the container VM |
 | `--pull` | | Pull image before running (always\|missing\|never) |
 | `--init` | | Run an init inside the container |
 | `--dns` | | Set custom DNS servers |

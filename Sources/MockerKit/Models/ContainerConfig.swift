@@ -19,6 +19,8 @@ public struct ContainerConfig: Codable, Sendable {
     public var user: String?
     public var entrypoint: String?
     public var platform: String?
+    public var virtualization: Bool
+    public var kernel: String?
     public var dns: [String]
     public var addHost: [String]
     public var privileged: Bool
@@ -54,6 +56,8 @@ public struct ContainerConfig: Codable, Sendable {
         user: String? = nil,
         entrypoint: String? = nil,
         platform: String? = nil,
+        virtualization: Bool = false,
+        kernel: String? = nil,
         dns: [String] = [],
         addHost: [String] = [],
         privileged: Bool = false,
@@ -88,6 +92,8 @@ public struct ContainerConfig: Codable, Sendable {
         self.user = user
         self.entrypoint = entrypoint
         self.platform = platform
+        self.virtualization = virtualization
+        self.kernel = kernel
         self.dns = dns
         self.addHost = addHost
         self.privileged = privileged
