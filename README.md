@@ -37,24 +37,13 @@ Your existing `docker-compose.yml` works as-is.
 
 ## What's New
 
-### v0.1.9 — Full Docker CLI Flag Compatibility
-- **111 commands/subcommands** with Docker-matching flags
-- `run`/`create`: ~50 new flags (`--attach`, `--cpu-shares`, `--gpus`, `--init`, `--memory`, `--privileged`, `--restart`, `--shm-size`, `--ulimit`, etc.)
-- `build`: ~25 BuildKit/Buildx flags (`--cache-from`, `--load`, `--push`, `--secret`, `--ssh`, etc.)
-- `compose`: ~200+ flags across 22 subcommands
-- New commands: `commit`, `container prune`, `container export`, `image rm/inspect/prune`
-- Full [COMMANDS.md](COMMANDS.md) reference and [CHANGELOG.md](CHANGELOG.md) added
+### v0.2.1
 
-### v0.1.8 — `--env-file` support
-- **`mocker run --env-file .env`** — load environment variables from file, just like Docker
 
-### v0.1.7 — Compose improvements & `--rm` flag
-- **`mocker run --rm`** — auto-remove container on exit
-- `compose.yaml` / `compose.yml` recognized as default compose file
-- Compose `${VAR:-default}` variable substitution fix
 
-> See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+### Features
 
+* add nested virtualization support for run/create ([85362fa](https://github.com/us/mocker/commit/85362fa5599707550a671d07f40a24fe0b1c30a5)), closes [#4](https://github.com/us/mocker/issues/4)
 ## Features
 
 - **Docker CLI compatible** — `run`, `ps`, `stop`, `rm`, `exec`, `logs`, `build`, `pull`, `push`, `images`, `tag`, `rmi`, `inspect`, `stats`
