@@ -24,7 +24,7 @@ struct Push: AsyncParsableCommand {
 
         let ref = try ImageReference.parse(image)
         print("Pushing \(ref.fullReference)...")
-        try await manager.push(image)
+        try await manager.push(image, platform: platform)
         print("Successfully pushed \(ref.fullReference)")
     }
 }

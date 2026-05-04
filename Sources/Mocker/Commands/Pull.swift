@@ -29,7 +29,7 @@ struct Pull: AsyncParsableCommand {
             print("Using default tag: latest")
         }
 
-        let (info, alreadyExists) = try await manager.pull(image)
+        let (info, alreadyExists) = try await manager.pull(image, platform: platform)
 
         if alreadyExists {
             print("Digest: \(info.id)")

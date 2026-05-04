@@ -14,15 +14,20 @@ public actor ImageManager {
 
     /// Pull an image from a registry.
     /// Returns (image, alreadyExisted) so the CLI can show the right status message.
-    public func pull(_ reference: String) async throws -> (ImageInfo, Bool) {
+    /// - Parameter platform: optional `linux/amd64`-style filter; nil pulls the full manifest list.
+    public func pull(_ reference: String, platform: String? = nil) async throws -> (ImageInfo, Bool) {
         let normalized = try Self.normalize(reference)
+        let parsedPlatform = try platform.map { try ContainerizationOCI.Platform(from: $0) }
 
-        // Check if already present
-        if let existing = try? await imageStore.get(reference: normalized) {
+        // Only short-circuit when the caller did not request a specific platform —
+        // a platform-filtered pull may need to fetch additional descriptors that
+        // the existing entry does not cover.
+        if parsedPlatform == nil,
+           let existing = try? await imageStore.get(reference: normalized) {
             return (Self.toImageInfo(existing), true)
         }
 
-        let image = try await imageStore.pull(reference: normalized, platform: .arm64)
+        let image = try await imageStore.pull(reference: normalized, platform: parsedPlatform)
         return (Self.toImageInfo(image), false)
     }
 
@@ -171,12 +176,14 @@ public actor ImageManager {
     // MARK: - Push
 
     /// Push an image to a registry.
-    public func push(_ reference: String) async throws {
+    /// - Parameter platform: optional `linux/amd64`-style filter; nil pushes the full manifest list.
+    public func push(_ reference: String, platform: String? = nil) async throws {
         let normalized = try Self.normalize(reference)
         guard (try? await imageStore.get(reference: normalized)) != nil else {
             throw MockerError.imageNotFound(reference)
         }
-        try await imageStore.push(reference: normalized, platform: .arm64)
+        let parsedPlatform = try platform.map { try ContainerizationOCI.Platform(from: $0) }
+        try await imageStore.push(reference: normalized, platform: parsedPlatform)
     }
 
     // MARK: - Save / Load
@@ -235,8 +242,3 @@ public actor ImageManager {
     }
 }
 
-extension ContainerizationOCI.Platform {
-    static var arm64: ContainerizationOCI.Platform {
-        .init(arch: "arm64", os: "linux", variant: "v8")
-    }
-}

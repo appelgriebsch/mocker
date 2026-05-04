@@ -33,4 +33,24 @@ struct CLITests {
         #expect(command.kernel == "/tmp/vmlinux")
         #expect(command.image == "ubuntu:latest")
     }
+
+    @Test("Pull command accepts --platform flag")
+    func pullPlatformFlag() throws {
+        let command = try Pull.parse(["--platform", "linux/amd64", "alpine:latest"])
+        #expect(command.platform == "linux/amd64")
+        #expect(command.image == "alpine:latest")
+    }
+
+    @Test("Pull command leaves platform nil when omitted")
+    func pullPlatformDefaultsNil() throws {
+        let command = try Pull.parse(["alpine:latest"])
+        #expect(command.platform == nil)
+    }
+
+    @Test("Push command accepts --platform flag")
+    func pushPlatformFlag() throws {
+        let command = try Push.parse(["--platform", "linux/arm64", "myrepo/app:1.0"])
+        #expect(command.platform == "linux/arm64")
+        #expect(command.image == "myrepo/app:1.0")
+    }
 }
