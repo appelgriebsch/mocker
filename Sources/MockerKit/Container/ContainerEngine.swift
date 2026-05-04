@@ -14,7 +14,7 @@ public actor ContainerEngine {
     private let store: ContainerStore
     private let portProxy: PortProxy
 
-    private static let containerCLI = resolveContainerCLI()
+    private static let containerCLI = CLIResolver.resolve()
 
     public init(config: MockerConfig = MockerConfig()) throws {
         self.config = config
@@ -22,14 +22,11 @@ public actor ContainerEngine {
         self.portProxy = PortProxy(proxiesDir: config.proxiesPath)
     }
 
-    static func resolveContainerCLI(fileManager: FileManager = .default) -> String {
-        let candidates = [
-            "/opt/homebrew/bin/container",
-            "/opt/homebrew/opt/container/bin/container",
-            "/usr/local/bin/container",
-        ]
-
-        return candidates.first { fileManager.isExecutableFile(atPath: $0) } ?? "/usr/local/bin/container"
+    static func resolveContainerCLI(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        CLIResolver.resolve(fileManager: fileManager, environment: environment)
     }
 
     // MARK: - Create (without starting)
@@ -413,7 +410,7 @@ public actor ContainerEngine {
         // Write data via stdin pipe to tee — avoids shell interpolation (injection-safe)
         let content = String(data: data, encoding: .utf8) ?? ""
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/local/bin/container")
+        process.executableURL = URL(fileURLWithPath: Self.containerCLI)
         process.arguments = ["exec", "-i", container.name, "tee", "--", path]
         let inputPipe = Pipe()
         process.standardInput = inputPipe

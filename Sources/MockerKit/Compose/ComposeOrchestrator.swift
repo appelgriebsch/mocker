@@ -171,7 +171,7 @@ public actor ComposeOrchestrator {
 
             // Use tee -a to append to /etc/hosts without shell interpolation
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/local/bin/container")
+            process.executableURL = URL(fileURLWithPath: CLIResolver.resolve())
             process.arguments = ["exec", "-i", target.info.id, "tee", "-a", "--", "/etc/hosts"]
             let inputPipe = Pipe()
             process.standardInput = inputPipe

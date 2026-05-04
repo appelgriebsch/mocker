@@ -162,9 +162,89 @@ struct ContainerEngineTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let fileManager = RootedFileManager(root: root.path)
-        let resolved = ContainerEngine.resolveContainerCLI(fileManager: fileManager)
+        let resolved = ContainerEngine.resolveContainerCLI(fileManager: fileManager, environment: [:])
 
         #expect(resolved == "/opt/homebrew/bin/container")
+    }
+
+    @Test("CLIResolver honors MOCKER_CONTAINER_CLI override")
+    func testCLIResolverHonorsEnvOverride() throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("mocker-cli-override-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let custom = tmp.appendingPathComponent("container")
+        FileManager.default.createFile(atPath: custom.path, contents: Data())
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: custom.path)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let resolved = CLIResolver.resolve(
+            fileManager: .default,
+            environment: ["MOCKER_CONTAINER_CLI": custom.path]
+        )
+
+        #expect(resolved == custom.path)
+    }
+
+    @Test("CLIResolver falls back through PATH before well-known locations")
+    func testCLIResolverUsesPATH() throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("mocker-cli-path-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let custom = tmp.appendingPathComponent("container")
+        FileManager.default.createFile(atPath: custom.path, contents: Data())
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: custom.path)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let resolved = CLIResolver.resolve(
+            fileManager: .default,
+            environment: ["PATH": tmp.path]
+        )
+
+        #expect(resolved == custom.path)
+    }
+
+    @Test("CLIResolver falls through to final default when nothing matches")
+    func testCLIResolverIgnoresMissingOverride() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("mocker-cli-empty-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileManager = RootedFileManager(root: root.path)
+
+        let resolved = CLIResolver.resolve(
+            fileManager: fileManager,
+            environment: [
+                "MOCKER_CONTAINER_CLI": "/nonexistent/path/container",
+                "PATH": "",
+            ]
+        )
+
+        #expect(resolved == "/usr/local/bin/container")
+    }
+
+    @Test("CLIResolver prefers PATH over fallback locations")
+    func testCLIResolverPathBeatsFallback() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("mocker-cli-precedence-\(UUID().uuidString)")
+        let pathDir = root.appendingPathComponent("custom/bin", isDirectory: true)
+        let homebrewBin = root.appendingPathComponent("opt/homebrew/bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: pathDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: homebrewBin, withIntermediateDirectories: true)
+
+        for url in [pathDir.appendingPathComponent("container"),
+                    homebrewBin.appendingPathComponent("container")] {
+            FileManager.default.createFile(atPath: url.path, contents: Data())
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let fileManager = RootedFileManager(root: root.path)
+        let resolved = CLIResolver.resolve(
+            fileManager: fileManager,
+            environment: ["PATH": "/custom/bin"]
+        )
+
+        #expect(resolved == "/custom/bin/container")
     }
 }
 

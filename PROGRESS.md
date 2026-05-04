@@ -1,3 +1,46 @@
+# Progress Plan: v0.3.0 Multi-Arch Image Support
+
+> Status: In Progress | Date: 2026-05-05
+
+## Objective
+Fix open multi-arch GitHub issues. Reference plan: `.context/multi-arch-plan.md`. Each PR codex-reviewed before commit.
+
+## Tier Map
+
+### Tier 0
+| ID | Task | Risk | Files | Status |
+|----|------|------|-------|--------|
+| T1 | PR 1a — shared `CLIResolver` | low | MockerKit/Container/CLIResolver.swift, ContainerEngine, ImageManager, ComposeOrchestrator | done (codex APPROVE_WITH_NITS, nits applied) |
+
+### Tier 1 (depends on T1)
+| ID | Task | Risk | Depends On | Files | Status |
+|----|------|------|------------|-------|--------|
+| T2 | PR 1c — drop hardcoded `.arm64`, wire `--platform` through Pull/Push, fix Pull early-return bug | medium | T1 | MockerKit/Image/ImageManager.swift, Mocker/Commands/Pull.swift, Push.swift | pending |
+
+### Tier 2 (depends on T2)
+| ID | Task | Risk | Depends On | Files | Status |
+|----|------|------|------------|-------|--------|
+| T3 | PR 1b — store path switch (read-only Apple store + CLI shell-out for writes; Option A) | high | T2 | MockerKit/Config/MockerConfig.swift, MockerKit/Image/ImageManager.swift | pending |
+
+### Tier 3 (depends on T3)
+| ID | Task | Risk | Depends On | Files | Status |
+|----|------|------|------------|-------|--------|
+| T4 | PR 2 — multi-platform build (`Build.platforms: [String]`, repeatable `--platform`) | medium | T3 | Mocker/Commands/Build.swift, ImageManager.swift | pending |
+| T5 | PR 3 — `mocker manifest create` + `inspect` (pure Swift via ContainerizationOCI.Index + LocalContentStore.ingest + ImageStore.create) | high | T3 | new ManifestManager + commands | pending |
+| T6 | PR 4 — `mocker manifest add/rm/push` | medium | T5 | ManifestManager extensions | pending |
+
+## Issues
+| # | Issue | Task | Resolution | Status |
+|---|-------|------|------------|--------|
+| — | — | — | — | — |
+
+## Notes
+| # | Note | Context |
+|---|------|---------|
+| 1 | Concurrency: Option A (read-only mocker SDK + CLI shell-out for writes) | T3 |
+
+---
+
 # Progress Plan: v0.2.0 "Ground Truth"
 
 > Status: Complete | Date: 2026-03-28

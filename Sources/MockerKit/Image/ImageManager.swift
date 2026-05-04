@@ -108,7 +108,7 @@ public actor ImageManager {
 
     // MARK: - Build
 
-    private static let containerCLI = "/usr/local/bin/container"
+    private static let containerCLI = CLIResolver.resolve()
 
     /// Build an image from a Dockerfile using the `container` CLI.
     public func build(tag: String, context: String, dockerfile: String = "Dockerfile", noCache: Bool = false, buildArgs: [String] = [], platform: String? = nil, target: String? = nil, labels: [String] = [], quiet: Bool = false, progress: String? = nil, output: [String] = []) async throws -> ImageInfo {
