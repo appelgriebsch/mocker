@@ -172,9 +172,54 @@ mocker rmi my-registry.io/alpine:v1
 # Build from Dockerfile
 mocker build -t myapp:latest .
 
+# Multi-platform build (repeats --platform per architecture)
+mocker build --platform linux/amd64 --platform linux/arm64 -t myapp:latest .
+
 # Push to registry
 mocker push my-registry.io/myapp:latest
 ```
+
+### Manifest Lists (multi-arch images)
+
+```bash
+# Inspect an OCI image index
+mocker manifest inspect myrepo/multi:latest
+
+# Assemble a manifest list from existing per-arch images
+mocker manifest create myrepo/multi:latest myrepo/app:amd64 myrepo/app:arm64
+
+# Splice a child image's platform into an existing list (replaces same-platform entry)
+mocker manifest add myrepo/multi:latest myrepo/app:arm64
+
+# Drop an entry by platform spec or digest
+mocker manifest rm myrepo/multi:latest linux/amd64
+mocker manifest rm myrepo/multi:latest sha256:cb96058800ca…
+
+# Override platform metadata on an entry
+mocker manifest annotate myrepo/multi:latest myrepo/app:arm64 --variant v8
+
+# Push the assembled list to the registry
+mocker manifest push myrepo/multi:latest
+```
+
+### Building for exotic architectures
+
+`mocker build --platform linux/ppc64le|s390x|riscv64` works for layer-only Dockerfiles
+(`FROM` / `COPY` / `CMD`) but fails with **`Exec format error`** on any `RUN` instruction.
+Apple's `container build` BuildKit VM is an arm64 Linux VM with **no QEMU `binfmt_misc`
+handlers** for non-arm64/non-amd64 architectures. `linux/amd64` works only because Apple
+Silicon ships hardware Rosetta 2 translation. Tracking upstream:
+[apple/container#1496](https://github.com/apple/container/issues/1496).
+
+Until Apple ships QEMU support, two workarounds exist:
+
+| Path | Tradeoff |
+|------|----------|
+| **Run a Podman machine** alongside mocker. Its Fedora CoreOS VM has `qemu-user-static` registered, so `podman build --platform linux/ppc64le` handles `RUN` steps. Use `mocker manifest create` afterwards to assemble per-arch images into a list. | Requires a persistent QEMU VM — extra memory and reliability surface. |
+| **`container run --virtualization`** a Linux VM, install `qemu-user-static` + Docker inside, build there, then `container image save` / `mocker manifest add` the result. | Manual setup; one-time per arch you need. |
+
+For arm64 and amd64 (Rosetta 2) the native path is faster and supported — exotic-arch
+emulation is a workaround until upstream lands.
 
 ### Inspect & Stats
 
