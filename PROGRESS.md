@@ -15,7 +15,7 @@ Fix open multi-arch GitHub issues. Reference plan: `.context/multi-arch-plan.md`
 ### Tier 1 (depends on T1)
 | ID | Task | Risk | Depends On | Files | Status |
 |----|------|------|------------|-------|--------|
-| T2 | PR 1c — drop hardcoded `.arm64`, wire `--platform` through Pull/Push, fix Pull early-return bug | medium | T1 | MockerKit/Image/ImageManager.swift, Mocker/Commands/Pull.swift, Push.swift | pending |
+| T2 | PR 1c — drop hardcoded `.arm64`, wire `--platform` through Pull/Push, fix Pull early-return bug | medium | T1 | MockerKit/Image/ImageManager.swift, Mocker/Commands/Pull.swift, Push.swift | done (codex APPROVE) |
 
 ### Tier 2 (depends on T2)
 | ID | Task | Risk | Depends On | Files | Status |

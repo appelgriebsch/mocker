@@ -19,9 +19,49 @@ public struct MockerConfig: Codable, Sendable {
         return "\(home)/.mocker"
     }
 
-    /// OCI-compatible image store path (used by Apple Containerization framework).
+    /// OCI-compatible image store path used by Apple Containerization framework.
+    ///
+    /// Resolution order:
+    ///   1. `MOCKER_OCI_STORE` env override (escape hatch)
+    ///   2. Apple `container` CLI's store at `~/Library/Application Support/com.apple.container/`
+    ///      when populated — keeps mocker's view consistent with the CLI.
+    ///   3. Legacy `<dataRoot>/oci-store` (used only when Apple store is absent).
+    ///
+    /// Concurrency caveat: when sharing Apple's store, `state.json` writes from
+    /// mocker and the `container` CLI are not protected by inter-process locking.
+    /// Avoid running pull/remove/tag concurrently with the CLI.
     public var ociStorePath: URL {
-        URL(fileURLWithPath: dataRoot).appendingPathComponent("oci-store")
+        if let override = ProcessInfo.processInfo.environment["MOCKER_OCI_STORE"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
+        if let apple = Self.appleContainerStorePath() {
+            return apple
+        }
+        return URL(fileURLWithPath: dataRoot).appendingPathComponent("oci-store")
+    }
+
+    /// Apple `container` CLI store root, or nil when not yet populated.
+    /// Detection: `state.json` (regular file) or `content/` (directory) present.
+    public static func appleContainerStorePath(
+        fileManager: FileManager = .default,
+        homeDirectory: String? = nil
+    ) -> URL? {
+        let home = homeDirectory ?? fileManager.homeDirectoryForCurrentUser.path
+        let root = URL(fileURLWithPath: "\(home)/Library/Application Support/com.apple.container")
+
+        var isDir: ObjCBool = false
+        if fileManager.fileExists(atPath: root.appendingPathComponent("state.json").path,
+                                  isDirectory: &isDir),
+           !isDir.boolValue {
+            return root
+        }
+        if fileManager.fileExists(atPath: root.appendingPathComponent("content").path,
+                                  isDirectory: &isDir),
+           isDir.boolValue {
+            return root
+        }
+        return nil
     }
 
     /// Path for container metadata storage.
