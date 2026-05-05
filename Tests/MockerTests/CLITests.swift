@@ -71,4 +71,10 @@ struct CLITests {
         let command = try Build.parse(["-t", "x:latest", "."])
         #expect(command.platform.isEmpty)
     }
+
+    @Test("Manifest inspect command parses reference argument")
+    func manifestInspectParse() throws {
+        let command = try ManifestInspect.parse(["myrepo/multi:latest"])
+        #expect(command.manifestList == "myrepo/multi:latest")
+    }
 }
