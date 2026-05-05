@@ -77,4 +77,15 @@ struct CLITests {
         let command = try ManifestInspect.parse(["myrepo/multi:latest"])
         #expect(command.manifestList == "myrepo/multi:latest")
     }
+
+    @Test("Manifest create command parses list name and children")
+    func manifestCreateParse() throws {
+        let command = try ManifestCreate.parse([
+            "myrepo/multi:latest",
+            "myrepo/app:linux-amd64",
+            "myrepo/app:linux-arm64",
+        ])
+        #expect(command.manifestList == "myrepo/multi:latest")
+        #expect(command.manifests == ["myrepo/app:linux-amd64", "myrepo/app:linux-arm64"])
+    }
 }
