@@ -8,8 +8,11 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%2026%2B-blue.svg)](https://developer.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Swift Package Manager](https://img.shields.io/badge/SPM-compatible-brightgreen.svg)](Package.swift)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/us?label=Sponsor&logo=GitHub-Sponsors&color=ea4aaa)](https://github.com/sponsors/us)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
+
+If Mocker saves you from Docker Desktop, [**sponsor the project on GitHub**](https://github.com/sponsors/us) — it directly funds development.
 
 </div>
 
