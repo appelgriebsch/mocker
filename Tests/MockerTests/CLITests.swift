@@ -53,4 +53,22 @@ struct CLITests {
         #expect(command.platform == "linux/arm64")
         #expect(command.image == "myrepo/app:1.0")
     }
+
+    @Test("Build command accepts repeated --platform flags")
+    func buildRepeatedPlatform() throws {
+        let command = try Build.parse([
+            "-t", "multi:latest",
+            "--platform", "linux/amd64",
+            "--platform", "linux/arm64",
+            ".",
+        ])
+        #expect(command.platform == ["linux/amd64", "linux/arm64"])
+        #expect(command.tag == "multi:latest")
+    }
+
+    @Test("Build command leaves platform empty when omitted")
+    func buildPlatformDefaultsEmpty() throws {
+        let command = try Build.parse(["-t", "x:latest", "."])
+        #expect(command.platform.isEmpty)
+    }
 }

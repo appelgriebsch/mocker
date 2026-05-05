@@ -21,8 +21,8 @@ struct Build: AsyncParsableCommand {
     @Option(name: .customLong("build-arg"), parsing: .singleValue, help: "Set build-time variables")
     var buildArg: [String] = []
 
-    @Option(name: .long, help: "Set target platform for build")
-    var platform: String?
+    @Option(name: .long, parsing: .singleValue, help: "Set target platform(s) for build (repeat for multi-arch, e.g. --platform linux/amd64 --platform linux/arm64)")
+    var platform: [String] = []
 
     @Option(name: .long, help: "Set the target build stage to build")
     var target: String?
@@ -129,7 +129,7 @@ struct Build: AsyncParsableCommand {
         }
         let image = try await manager.build(
             tag: tag, context: context, dockerfile: file, noCache: noCache,
-            buildArgs: buildArg, platform: platform, target: target,
+            buildArgs: buildArg, platforms: platform, target: target,
             labels: label, quiet: quiet, progress: progress, output: output
         )
         if quiet {

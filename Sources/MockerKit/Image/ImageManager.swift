@@ -116,7 +116,8 @@ public actor ImageManager {
     private static let containerCLI = CLIResolver.resolve()
 
     /// Build an image from a Dockerfile using the `container` CLI.
-    public func build(tag: String, context: String, dockerfile: String = "Dockerfile", noCache: Bool = false, buildArgs: [String] = [], platform: String? = nil, target: String? = nil, labels: [String] = [], quiet: Bool = false, progress: String? = nil, output: [String] = []) async throws -> ImageInfo {
+    /// - Parameter platforms: pass multiple values to build a multi-arch manifest list (e.g. `["linux/amd64", "linux/arm64"]`).
+    public func build(tag: String, context: String, dockerfile: String = "Dockerfile", noCache: Bool = false, buildArgs: [String] = [], platforms: [String] = [], target: String? = nil, labels: [String] = [], quiet: Bool = false, progress: String? = nil, output: [String] = []) async throws -> ImageInfo {
         let contextURL: URL
         if context.hasPrefix("/") {
             contextURL = URL(fileURLWithPath: context)
@@ -134,7 +135,7 @@ public actor ImageManager {
         var args = ["build", "-t", tag, "-f", dockerfilePath]
         if noCache { args.append("--no-cache") }
         for arg in buildArgs { args += ["--build-arg", arg] }
-        if let platform { args += ["--platform", platform] }
+        for p in platforms { args += ["--platform", p] }
         if let target { args += ["--target", target] }
         for l in labels { args += ["-l", l] }
         if quiet { args.append("-q") }
