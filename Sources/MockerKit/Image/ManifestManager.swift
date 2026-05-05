@@ -24,18 +24,9 @@ public actor ManifestManager {
         // the verbatim form first then the normalized form so mocker stays aligned with
         // `container image inspect` even for ad-hoc local tags.
         let image = try await resolveImage(reference)
-
-        let mediaType = image.mediaType
-        guard mediaType == MediaTypes.index || mediaType == MediaTypes.dockerManifestList else {
-            throw MockerError.operationFailed(
-                "image \(reference) is not a manifest list (mediaType: \(mediaType))"
-            )
-        }
-
+        try Self.requireIndexMediaType(image.mediaType, reference: reference)
         let index = try await image.index()
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(index)
+        return try Self.encodeIndex(index)
     }
 
     /// Create a manifest list (OCI image index) from existing local images.
@@ -68,26 +59,10 @@ public actor ManifestManager {
             let image = try await resolveImage(child)
             // Children must themselves be an index — Apple's container CLI stores even
             // single-platform builds this way, so this works for both single- and multi-arch.
-            let childMediaType = image.mediaType
-            guard childMediaType == MediaTypes.index || childMediaType == MediaTypes.dockerManifestList else {
-                throw MockerError.operationFailed(
-                    "child image \(child) is not a manifest list (mediaType: \(childMediaType))"
-                )
-            }
+            try Self.requireIndexMediaType(image.mediaType, reference: child)
             let childIndex = try await image.index()
-            for desc in childIndex.manifests {
-                // Skip non-runnable descriptors: attestations, SBOMs, nested indexes, signatures.
-                guard desc.mediaType == MediaTypes.imageManifest || desc.mediaType == MediaTypes.dockerManifest else {
-                    continue
-                }
-                guard let platform = desc.platform,
-                      !platform.os.isEmpty,
-                      !platform.architecture.isEmpty,
-                      platform.os != "unknown",
-                      platform.architecture != "unknown" else {
-                    continue
-                }
-                let key = "\(platform.os)/\(platform.architecture)/\(platform.variant ?? "")"
+            for desc in Self.filterPlatformDescriptors(childIndex.manifests) {
+                let key = Self.platformKey(desc)
                 if seenPlatforms.insert(key).inserted {
                     manifests.append(desc)
                 }
@@ -101,15 +76,134 @@ public actor ManifestManager {
         }
 
         let index = Index(manifests: manifests)
+        try await writeIndex(index, as: normalizedName)
+        return try Self.encodeIndex(index)
+    }
+
+    /// Add a child image's platform descriptors to an existing manifest list.
+    /// New descriptors REPLACE existing entries with the same platform (add-semantics:
+    /// the latest add wins). Creates a new content blob and re-points the reference.
+    @discardableResult
+    public func add(list: String, child: String) async throws -> Data {
+        let listImage = try await resolveImage(list)
+        let normalizedListName = listImage.reference
+        try Self.requireIndexMediaType(listImage.mediaType, reference: list)
+        let existing = try await listImage.index()
+        let originalDigest = listImage.descriptor.digest
+
+        let childImage = try await resolveImage(child)
+        try Self.requireIndexMediaType(childImage.mediaType, reference: child)
+        let childIndex = try await childImage.index()
+        let incoming = Self.filterPlatformDescriptors(childIndex.manifests)
+        guard !incoming.isEmpty else {
+            throw MockerError.operationFailed(
+                "child image \(child) has no usable image-manifest descriptors with platform info"
+            )
+        }
+
+        // Drop any existing descriptor whose platform equals an incoming descriptor's
+        // platform — we use ContainerizationOCI.Platform == directly so arm64 nil-vs-v8
+        // is treated as the same platform.
+        let incomingPlatforms: [Platform] = incoming.compactMap { $0.platform }
+        var merged = existing.manifests.filter { desc in
+            guard let platform = desc.platform else { return true }
+            return !incomingPlatforms.contains { $0 == platform }
+        }
+        merged.append(contentsOf: incoming)
+
+        let index = Self.rebuild(existing, manifests: merged)
+        try await assertUnchanged(reference: normalizedListName, expectedDigest: originalDigest)
+        try await writeIndex(index, as: normalizedListName, mediaType: listImage.mediaType)
+        return try Self.encodeIndex(index)
+    }
+
+    /// Remove a platform from an existing manifest list.
+    /// `target` may be a platform spec ("linux/amd64", "linux/arm64/v8") or a manifest
+    /// digest ("sha256:..."). Throws if no entry matches.
+    @discardableResult
+    public func remove(list: String, target: String) async throws -> Data {
+        let listImage = try await resolveImage(list)
+        let normalizedListName = listImage.reference
+        try Self.requireIndexMediaType(listImage.mediaType, reference: list)
+        let existing = try await listImage.index()
+        let originalDigest = listImage.descriptor.digest
+
+        let isDigest = target.hasPrefix("sha256:")
+        let platformMatch = isDigest ? nil : try ContainerizationOCI.Platform(from: target)
+
+        let filtered = existing.manifests.filter { desc in
+            if isDigest { return desc.digest != target }
+            if let p = platformMatch, desc.platform == p { return false }
+            return true
+        }
+        guard filtered.count != existing.manifests.count else {
+            throw MockerError.operationFailed(
+                "no manifest entry matching \(target) in \(list)"
+            )
+        }
+        guard !filtered.isEmpty else {
+            throw MockerError.operationFailed(
+                "removing \(target) would leave \(list) empty; delete the list with 'mocker rmi' instead"
+            )
+        }
+
+        let index = Self.rebuild(existing, manifests: filtered)
+        try await assertUnchanged(reference: normalizedListName, expectedDigest: originalDigest)
+        try await writeIndex(index, as: normalizedListName, mediaType: listImage.mediaType)
+        return try Self.encodeIndex(index)
+    }
+
+    /// Push a manifest list to its registry.
+    public func push(_ reference: String) async throws {
+        let image = try await resolveImage(reference)
+        try Self.requireIndexMediaType(image.mediaType, reference: reference)
+        // resolveImage gives us back the canonical reference the store knows about,
+        // which is the form push needs.
+        try await imageStore.push(reference: image.reference, platform: nil)
+    }
+
+    // MARK: - Helpers
+
+    /// Rebuild an Index preserving the original media type and any annotations/subject/
+    /// artifactType so manifest-list metadata isn't silently stripped on edit.
+    private static func rebuild(_ existing: Index, manifests: [Descriptor]) -> Index {
+        Index(
+            schemaVersion: existing.schemaVersion,
+            mediaType: existing.mediaType.isEmpty ? MediaTypes.index : existing.mediaType,
+            manifests: manifests,
+            annotations: existing.annotations,
+            subject: existing.subject,
+            artifactType: existing.artifactType
+        )
+    }
+
+    /// Compare-and-swap guard: re-read the reference's current descriptor and bail if it
+    /// differs from the digest we captured when the operation started. This catches the
+    /// common case where a second process mutated the list while we were assembling the
+    /// edit. Not airtight — there's still a TOCTOU window between this check and the
+    /// final write — but materially better than no check.
+    private func assertUnchanged(reference: String, expectedDigest: String) async throws {
+        guard let current = try? await imageStore.get(reference: reference) else {
+            throw MockerError.operationFailed(
+                "manifest list \(reference) disappeared during edit; aborting"
+            )
+        }
+        if current.descriptor.digest != expectedDigest {
+            throw MockerError.operationFailed(
+                "manifest list \(reference) changed during edit (digest mismatch); aborting"
+            )
+        }
+    }
+
+    private func writeIndex(_ index: Index, as normalizedName: String, mediaType: String = MediaTypes.index) async throws {
         let contentStore = try LocalContentStore(path: storePath.appendingPathComponent("content"))
         let session = try await contentStore.newIngestSession()
         do {
             let writer = try ContentWriter(for: session.ingestDir)
             let result = try writer.create(from: index)
             _ = try await contentStore.completeIngestSession(session.id)
-
             let descriptor = Descriptor(
-                mediaType: MediaTypes.index,
+                mediaType: mediaType,
                 digest: "sha256:" + result.digest.encoded,
                 size: result.size
             )
@@ -120,7 +214,48 @@ public actor ManifestManager {
             try? await contentStore.cancelIngestSession(session.id)
             throw error
         }
+    }
 
+    private static func filterPlatformDescriptors(_ descriptors: [Descriptor]) -> [Descriptor] {
+        descriptors.filter { desc in
+            guard desc.mediaType == MediaTypes.imageManifest || desc.mediaType == MediaTypes.dockerManifest else {
+                return false
+            }
+            guard let p = desc.platform,
+                  !p.os.isEmpty, !p.architecture.isEmpty,
+                  p.os != "unknown", p.architecture != "unknown" else {
+                return false
+            }
+            return true
+        }
+    }
+
+    private static func platformKey(_ desc: Descriptor) -> String {
+        guard let p = desc.platform else { return "" }
+        return platformKey(forPlatform: p)
+    }
+
+    private static func platformKey(forPlatform p: Platform) -> String {
+        // Normalize arm64 nil-variant to v8 so two descriptors that ContainerizationOCI's
+        // Platform == treats as equal also collide in the dedup set.
+        let variant: String
+        if p.architecture == "arm64", p.variant == nil {
+            variant = "v8"
+        } else {
+            variant = p.variant ?? ""
+        }
+        return "\(p.os)/\(p.architecture)/\(variant)"
+    }
+
+    private static func requireIndexMediaType(_ mediaType: String, reference: String) throws {
+        guard mediaType == MediaTypes.index || mediaType == MediaTypes.dockerManifestList else {
+            throw MockerError.operationFailed(
+                "image \(reference) is not a manifest list (mediaType: \(mediaType))"
+            )
+        }
+    }
+
+    private static func encodeIndex(_ index: Index) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(index)

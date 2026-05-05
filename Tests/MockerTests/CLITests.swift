@@ -88,4 +88,25 @@ struct CLITests {
         #expect(command.manifestList == "myrepo/multi:latest")
         #expect(command.manifests == ["myrepo/app:linux-amd64", "myrepo/app:linux-arm64"])
     }
+
+    @Test("Manifest add command parses list and child")
+    func manifestAddParse() throws {
+        let command = try ManifestAdd.parse(["multi:latest", "child:linux-amd64"])
+        #expect(command.manifestList == "multi:latest")
+        #expect(command.manifest == "child:linux-amd64")
+    }
+
+    @Test("Manifest rm command parses list and target")
+    func manifestRmParse() throws {
+        let platformCmd = try ManifestRm.parse(["multi:latest", "linux/amd64"])
+        #expect(platformCmd.target == "linux/amd64")
+        let digestCmd = try ManifestRm.parse(["multi:latest", "sha256:deadbeef"])
+        #expect(digestCmd.target == "sha256:deadbeef")
+    }
+
+    @Test("Manifest push command parses list name")
+    func manifestPushParse() throws {
+        let command = try ManifestPush.parse(["myrepo/multi:latest"])
+        #expect(command.manifestList == "myrepo/multi:latest")
+    }
 }
