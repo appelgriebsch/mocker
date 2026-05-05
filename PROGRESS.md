@@ -3,11 +3,10 @@
 > Status: Complete | Date: 2026-05-05
 
 ## Completion Summary
-- **Completed**: 4 / 5 tasks (C1, C2, C4, C5)
-- **Blocked**: 1 (C3 — TLS-only registry push, environmental constraint, not a code bug)
+- **Completed**: 5 / 5 tasks (C1, C2, C3, C4, C5)
 - **Tests**: 65/65 passing
 - **Tiers executed**: 3
-- **Live verification**: `manifest create`, `inspect`, `add`, `rm`, `annotate`, multi-platform `build` all confirmed end-to-end on local Apple `container` store
+- **Live verification**: `manifest create`, `inspect`, `add`, `rm`, `annotate`, multi-platform `build`, and `manifest push` (verified against ttl.sh HTTPS registry — real multi-arch index landed) all confirmed end-to-end
 
 ## Objective
 v0.3.0 multi-arch core (T1-T6) shipped, but #9 has a missing subcommand (`annotate`),
@@ -28,7 +27,7 @@ shipping and writing release notes.
 ### Tier 1 (depends on C2)
 | ID  | Task | Risk | Depends On | Files | Status |
 |-----|------|------|------------|-------|--------|
-| C3  | Live-test `manifest push` end-to-end against a local registry running on Apple `container` | high | — (test only) | blocked |
+| C3  | Live-test `manifest push` end-to-end against a local registry running on Apple `container` | high | — (test only) | done |
 | C4  | Live-test multi-platform `mocker build --platform a --platform b` (T4 had no real build verification) | medium | — (test only) | done |
 
 ### Tier 2 (depends on Tier 1)
@@ -60,7 +59,7 @@ shipping and writing release notes.
 - **Definition**: Start a local OCI registry via `container run -d -p 5000:5000 docker.io/library/registry:2`. Tag an existing manifest list to point at the local registry (`mocker tag test-merged:v1 localhost:5000/test-merged:v1`). Run `mocker manifest push localhost:5000/test-merged:v1`. Verify by curl-ing the registry's manifest endpoint and asserting the returned JSON has `mediaType=application/vnd.oci.image.index.v1+json` with both `linux/amd64` and `linux/arm64` entries. Tear down the registry container after.
 - **Test**: `curl -s http://localhost:5000/v2/test-merged/manifests/v1 -H 'Accept: application/vnd.oci.image.index.v1+json'` returns a valid index with ≥2 platform manifests.
 - **Rollback**: `container stop <registry-id>; container rm <registry-id>` — purely test infrastructure.
-- **Status**: blocked — Apple's Containerization push path enforces TLS and rejects plain-HTTP registries (`-9836: bad protocol version`). Registry started successfully on 192.168.64.3:5000, mocker push fails on TLS handshake. The push code path itself is identical to existing `mocker push` plumbing (`imageStore.push(reference:platform:nil)`); E2E verification deferred until an HTTPS-capable test registry or insecure-registry support is wired.
+- **Status**: done — pushed to ttl.sh (HTTPS, anonymous). Local plain-HTTP registry was blocked by Containerization's TLS-only transport (`-9836: bad protocol version`), but ttl.sh provided an HTTPS endpoint. `curl -H 'Accept: application/vnd.oci.image.index.v1+json' https://ttl.sh/v2/<repo>/manifests/<tag>` returned a valid OCI image index with `linux/amd64` + `linux/arm64/v8` descriptors and `mediaType=application/vnd.oci.image.index.v1+json`. End-to-end push verified.
 
 ### C4: Live multi-platform build
 - **Tier**: 1 | **Risk**: medium
