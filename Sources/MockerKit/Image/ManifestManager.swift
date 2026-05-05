@@ -75,6 +75,15 @@ public actor ManifestManager {
             )
         }
 
+        // Re-check existence right before writeIndex to tighten the TOCTOU window
+        // for --replace=false. Not airtight (still TOCTOU between this check and the
+        // actual ImageStore.create call inside writeIndex), but materially smaller window.
+        if !replace, (try? await imageStore.get(reference: normalizedName)) != nil {
+            throw MockerError.operationFailed(
+                "image \(name) was created concurrently; pass --replace to overwrite"
+            )
+        }
+
         let index = Index(manifests: manifests)
         try await writeIndex(index, as: normalizedName)
         return try Self.encodeIndex(index)
@@ -266,20 +275,35 @@ public actor ManifestManager {
     private func writeIndex(_ index: Index, as normalizedName: String, mediaType: String = MediaTypes.index) async throws {
         let contentStore = try LocalContentStore(path: storePath.appendingPathComponent("content"))
         let session = try await contentStore.newIngestSession()
+
+        // Phase 1: write blob via ingest session. cancelIngestSession is the correct
+        // recovery here — the session is still open, so cancellation reclaims space.
+        let descriptor: Descriptor
         do {
             let writer = try ContentWriter(for: session.ingestDir)
             let result = try writer.create(from: index)
             _ = try await contentStore.completeIngestSession(session.id)
-            let descriptor = Descriptor(
+            descriptor = Descriptor(
                 mediaType: mediaType,
                 digest: "sha256:" + result.digest.encoded,
                 size: result.size
             )
+        } catch {
+            try? await contentStore.cancelIngestSession(session.id)
+            throw error
+        }
+
+        // Phase 2: register the reference. The ingest session is already completed, so
+        // cancelIngestSession is a no-op here. If create fails, the blob lands in the
+        // content store but no reference points at it — log a clear orphan warning to
+        // stderr so users can run garbage-collection or surface it as an issue.
+        do {
             _ = try await imageStore.create(
                 description: Containerization.Image.Description(reference: normalizedName, descriptor: descriptor)
             )
         } catch {
-            try? await contentStore.cancelIngestSession(session.id)
+            let warning = "warning: orphan content blob \(descriptor.digest) (\(descriptor.size) bytes) — failed to register reference \(normalizedName): \(error)\n"
+            FileHandle.standardError.write(Data(warning.utf8))
             throw error
         }
     }

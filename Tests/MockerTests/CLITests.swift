@@ -8,7 +8,9 @@ struct CLITests {
     func version() {
         let version = Version.currentVersion
         #expect(!version.isEmpty)
-        #expect(version == "0.2.0")
+        // x-release-please-start-version
+        #expect(version == "0.3.0")
+        // x-release-please-end
     }
 
     @Test("Run command accepts --env-file flag")

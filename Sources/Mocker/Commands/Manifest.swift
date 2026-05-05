@@ -13,9 +13,15 @@ struct ManifestCommand: AsyncParsableCommand {
             ManifestRm.self,
             ManifestAnnotate.self,
             ManifestPush.self,
-        ],
-        defaultSubcommand: ManifestInspect.self
+        ]
     )
+}
+
+/// Write a confirmation/status line to stderr so JSON output on stdout
+/// pipes cleanly to jq and friends.
+@inline(__always)
+private func printStatus(_ message: String) {
+    FileHandle.standardError.write(Data("\(message)\n".utf8))
 }
 
 struct ManifestAdd: AsyncParsableCommand {
@@ -34,7 +40,7 @@ struct ManifestAdd: AsyncParsableCommand {
         let manager = try ManifestManager(config: MockerConfig())
         let json = try await manager.add(list: manifestList, child: manifest)
         if let pretty = String(data: json, encoding: .utf8) { print(pretty) }
-        print("Updated manifest list \(manifestList)")
+        printStatus("Updated manifest list \(manifestList)")
     }
 }
 
@@ -54,7 +60,7 @@ struct ManifestRm: AsyncParsableCommand {
         let manager = try ManifestManager(config: MockerConfig())
         let json = try await manager.remove(list: manifestList, target: target)
         if let pretty = String(data: json, encoding: .utf8) { print(pretty) }
-        print("Updated manifest list \(manifestList)")
+        printStatus("Updated manifest list \(manifestList)")
     }
 }
 
@@ -89,7 +95,7 @@ struct ManifestAnnotate: AsyncParsableCommand {
             variant: variant
         )
         if let pretty = String(data: json, encoding: .utf8) { print(pretty) }
-        print("Updated manifest list \(manifestList)")
+        printStatus("Updated manifest list \(manifestList)")
     }
 }
 
@@ -105,7 +111,7 @@ struct ManifestPush: AsyncParsableCommand {
     func run() async throws {
         let manager = try ManifestManager(config: MockerConfig())
         try await manager.push(manifestList)
-        print("Pushed manifest list \(manifestList)")
+        printStatus("Pushed manifest list \(manifestList)")
     }
 }
 
@@ -134,7 +140,7 @@ struct ManifestCreate: AsyncParsableCommand {
         if let pretty = String(data: json, encoding: .utf8) {
             print(pretty)
         }
-        print("Created manifest list \(manifestList)")
+        printStatus("Created manifest list \(manifestList)")
     }
 }
 
