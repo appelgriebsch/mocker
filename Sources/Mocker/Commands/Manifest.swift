@@ -11,6 +11,7 @@ struct ManifestCommand: AsyncParsableCommand {
             ManifestCreate.self,
             ManifestAdd.self,
             ManifestRm.self,
+            ManifestAnnotate.self,
             ManifestPush.self,
         ],
         defaultSubcommand: ManifestInspect.self
@@ -52,6 +53,41 @@ struct ManifestRm: AsyncParsableCommand {
     func run() async throws {
         let manager = try ManifestManager(config: MockerConfig())
         let json = try await manager.remove(list: manifestList, target: target)
+        if let pretty = String(data: json, encoding: .utf8) { print(pretty) }
+        print("Updated manifest list \(manifestList)")
+    }
+}
+
+struct ManifestAnnotate: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "annotate",
+        abstract: "Override platform metadata for an entry in a manifest list"
+    )
+
+    @Argument(help: "Name of the manifest list")
+    var manifestList: String
+
+    @Argument(help: "Child image reference whose entry to annotate (must be single-platform)")
+    var manifest: String
+
+    @Option(name: .long, help: "Override OS (e.g., linux)")
+    var os: String?
+
+    @Option(name: .long, help: "Override architecture (e.g., amd64, arm64)")
+    var arch: String?
+
+    @Option(name: .long, help: "Override variant (e.g., v8)")
+    var variant: String?
+
+    func run() async throws {
+        let manager = try ManifestManager(config: MockerConfig())
+        let json = try await manager.annotate(
+            list: manifestList,
+            child: manifest,
+            os: os,
+            arch: arch,
+            variant: variant
+        )
         if let pretty = String(data: json, encoding: .utf8) { print(pretty) }
         print("Updated manifest list \(manifestList)")
     }

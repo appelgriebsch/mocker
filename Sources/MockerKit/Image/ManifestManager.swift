@@ -153,6 +153,74 @@ public actor ManifestManager {
         return try Self.encodeIndex(index)
     }
 
+    /// Override platform metadata for a specific entry inside a manifest list.
+    ///
+    /// `child` is resolved locally and must be unambiguous — its index must contain exactly
+    /// one image-manifest descriptor with platform info. The entry in `list` whose digest
+    /// matches that child manifest is rewritten with the supplied overrides; nil overrides
+    /// keep the existing value. Other descriptors and index-level metadata are preserved.
+    ///
+    /// Note: only os/arch/variant are exposed. ContainerizationOCI's Platform Codable
+    /// implementation drops osVersion/osFeatures on encode, so those fields don't round-trip
+    /// through the on-disk index. Re-add them when upstream gains support.
+    @discardableResult
+    public func annotate(
+        list: String,
+        child: String,
+        os: String? = nil,
+        arch: String? = nil,
+        variant: String? = nil
+    ) async throws -> Data {
+        let listImage = try await resolveImage(list)
+        let normalizedListName = listImage.reference
+        try Self.requireIndexMediaType(listImage.mediaType, reference: list)
+        let existing = try await listImage.index()
+        let originalDigest = listImage.descriptor.digest
+
+        let childImage = try await resolveImage(child)
+        try Self.requireIndexMediaType(childImage.mediaType, reference: child)
+        let childIndex = try await childImage.index()
+        let childDescriptors = Self.filterPlatformDescriptors(childIndex.manifests)
+        guard childDescriptors.count == 1 else {
+            throw MockerError.operationFailed(
+                "child image \(child) is ambiguous (\(childDescriptors.count) platform manifests); annotate requires a single-platform child"
+            )
+        }
+        let targetDigest = childDescriptors[0].digest
+
+        guard let targetIndex = existing.manifests.firstIndex(where: { $0.digest == targetDigest }) else {
+            throw MockerError.operationFailed(
+                "manifest list \(list) has no entry with digest \(targetDigest) (child \(child))"
+            )
+        }
+
+        let original = existing.manifests[targetIndex]
+        let basePlatform = original.platform ?? childDescriptors[0].platform
+        let updatedPlatform = Platform(
+            arch: arch ?? basePlatform?.architecture ?? "",
+            os: os ?? basePlatform?.os ?? "linux",
+            osVersion: basePlatform?.osVersion,
+            osFeatures: basePlatform?.osFeatures,
+            variant: variant ?? basePlatform?.variant
+        )
+
+        var manifests = existing.manifests
+        manifests[targetIndex] = Descriptor(
+            mediaType: original.mediaType,
+            digest: original.digest,
+            size: original.size,
+            urls: original.urls,
+            annotations: original.annotations,
+            platform: updatedPlatform,
+            artifactType: original.artifactType
+        )
+
+        let index = Self.rebuild(existing, manifests: manifests)
+        try await assertUnchanged(reference: normalizedListName, expectedDigest: originalDigest)
+        try await writeIndex(index, as: normalizedListName, mediaType: listImage.mediaType)
+        return try Self.encodeIndex(index)
+    }
+
     /// Push a manifest list to its registry.
     public func push(_ reference: String) async throws {
         let image = try await resolveImage(reference)

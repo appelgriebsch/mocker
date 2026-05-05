@@ -109,4 +109,27 @@ struct CLITests {
         let command = try ManifestPush.parse(["myrepo/multi:latest"])
         #expect(command.manifestList == "myrepo/multi:latest")
     }
+
+    @Test("Manifest annotate parses os/arch/variant overrides")
+    func manifestAnnotateParse() throws {
+        let command = try ManifestAnnotate.parse([
+            "multi:latest", "child:arm64",
+            "--os", "linux",
+            "--arch", "arm64",
+            "--variant", "v8",
+        ])
+        #expect(command.manifestList == "multi:latest")
+        #expect(command.manifest == "child:arm64")
+        #expect(command.os == "linux")
+        #expect(command.arch == "arm64")
+        #expect(command.variant == "v8")
+    }
+
+    @Test("Manifest annotate leaves overrides nil when omitted")
+    func manifestAnnotateDefaults() throws {
+        let command = try ManifestAnnotate.parse(["multi:latest", "child:arm64"])
+        #expect(command.os == nil)
+        #expect(command.arch == nil)
+        #expect(command.variant == nil)
+    }
 }
