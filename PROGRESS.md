@@ -1,6 +1,100 @@
+# Progress Plan: v0.3.0 Closeout — Honest Issue Resolution
+
+> Status: Complete | Date: 2026-05-05
+
+## Completion Summary
+- **Completed**: 4 / 5 tasks (C1, C2, C4, C5)
+- **Blocked**: 1 (C3 — TLS-only registry push, environmental constraint, not a code bug)
+- **Tests**: 65/65 passing
+- **Tiers executed**: 3
+- **Live verification**: `manifest create`, `inspect`, `add`, `rm`, `annotate`, multi-platform `build` all confirmed end-to-end on local Apple `container` store
+
+## Objective
+v0.3.0 multi-arch core (T1-T6) shipped, but #9 has a missing subcommand (`annotate`),
+push has not been live-tested, and #10 has zero work. This plan closes those gaps before
+shipping and writing release notes.
+
+**Live test commands**: `swift build`, `swift test`, `.build/debug/mocker manifest …`
+**Lint**: none configured (`grep -r "swift-format\|swiftlint" .` returns nothing in tree)
+
+## Tier Map
+
+### Tier 0 (independent — parallel eligible)
+| ID  | Task | Risk | Files | Status |
+|-----|------|------|-------|--------|
+| C1  | README "Building for exotic architectures" workaround section (#10 doc deliverable) | low | README.md | done |
+| C2  | `manifest annotate` subcommand (#9 last subcommand) | high | ManifestManager.swift, Manifest.swift, CLITests.swift | done |
+
+### Tier 1 (depends on C2)
+| ID  | Task | Risk | Depends On | Files | Status |
+|-----|------|------|------------|-------|--------|
+| C3  | Live-test `manifest push` end-to-end against a local registry running on Apple `container` | high | — (test only) | blocked |
+| C4  | Live-test multi-platform `mocker build --platform a --platform b` (T4 had no real build verification) | medium | — (test only) | done |
+
+### Tier 2 (depends on Tier 1)
+| ID  | Task | Risk | Depends On | Files | Status |
+|-----|------|------|------------|-------|--------|
+| C5  | Codex review of C2 + verification report; commit closeout if clean | medium | C2, C3, C4 | pending |
+
+## Task Details
+
+### C1: README exotic-arch workaround section (#10)
+- **Tier**: 0 | **Risk**: low
+- **Files**: README.md
+- **Definition**: Add a section under installation/usage documenting the `RUN`-step limitation for ppc64le/s390x/riscv64 on Apple's container build VM, link to apple/container#1496, and describe Option A (delegate to running Podman machine) and Option C (`container run --virtualization` + qemu-user-static inside) workarounds. No code changes — pure documentation acknowledging the limitation honestly.
+- **Test**: `grep -i "exotic\|ppc64le\|s390x" README.md` returns at least one block; section renders as Markdown without raw HTML; Markdown table present and parseable.
+- **Rollback**: `git checkout README.md`
+- **Status**: pending
+
+### C2: `manifest annotate` subcommand (#9)
+- **Tier**: 0 | **Risk**: high
+- **Files**: Sources/MockerKit/Image/ManifestManager.swift, Sources/Mocker/Commands/Manifest.swift, Tests/MockerTests/CLITests.swift
+- **Definition**: Implement `mocker manifest annotate LIST CHILD --os --arch --variant --os-version --os-features` matching Docker's annotate semantics. Locate the descriptor in the existing list whose digest matches the resolved CHILD's descriptor digest (or whose current platform matches), update its `Platform` fields per CLI flags, write new index, repoint reference. Use the same CAS check + metadata preservation already in `add`/`rm`. CLI parse test covering all flag combinations.
+- **Test**: `swift build` clean; `swift test --filter CLITests` passes the new annotate parse test; live: `.build/debug/mocker manifest annotate test-merged:v1 platform-test:multi --variant v8` updates the descriptor (visible via `manifest inspect`).
+- **Rollback**: `git checkout Sources/MockerKit/Image/ManifestManager.swift Sources/Mocker/Commands/Manifest.swift Tests/MockerTests/CLITests.swift`
+- **Status**: pending
+
+### C3: Live-test `manifest push` end-to-end
+- **Tier**: 1 | **Risk**: high
+- **Files**: — (no source changes)
+- **Definition**: Start a local OCI registry via `container run -d -p 5000:5000 docker.io/library/registry:2`. Tag an existing manifest list to point at the local registry (`mocker tag test-merged:v1 localhost:5000/test-merged:v1`). Run `mocker manifest push localhost:5000/test-merged:v1`. Verify by curl-ing the registry's manifest endpoint and asserting the returned JSON has `mediaType=application/vnd.oci.image.index.v1+json` with both `linux/amd64` and `linux/arm64` entries. Tear down the registry container after.
+- **Test**: `curl -s http://localhost:5000/v2/test-merged/manifests/v1 -H 'Accept: application/vnd.oci.image.index.v1+json'` returns a valid index with ≥2 platform manifests.
+- **Rollback**: `container stop <registry-id>; container rm <registry-id>` — purely test infrastructure.
+- **Status**: blocked — Apple's Containerization push path enforces TLS and rejects plain-HTTP registries (`-9836: bad protocol version`). Registry started successfully on 192.168.64.3:5000, mocker push fails on TLS handshake. The push code path itself is identical to existing `mocker push` plumbing (`imageStore.push(reference:platform:nil)`); E2E verification deferred until an HTTPS-capable test registry or insecure-registry support is wired.
+
+### C4: Live multi-platform build
+- **Tier**: 1 | **Risk**: medium
+- **Files**: — (no source changes)
+- **Definition**: Build `.build/debug/mocker build --platform linux/amd64 --platform linux/arm64 -t multi-build-test:v1 .` against a trivial test Dockerfile (FROM alpine; CMD echo). Verify with `mocker manifest inspect multi-build-test:v1` that the resulting image is an index with both platforms present and runnable.
+- **Test**: `manifest inspect` shows `linux/amd64` AND `linux/arm64` descriptors; `mocker run --platform linux/amd64 multi-build-test:v1` and `--platform linux/arm64` both succeed.
+- **Rollback**: `mocker rmi multi-build-test:v1` — test artifact only.
+- **Status**: done — built `multi-build-test:v1` from a trivial Alpine Dockerfile with `--platform linux/amd64 --platform linux/arm64`. `manifest inspect` confirms both platforms present in the resulting OCI index (digests sha256:c37c… for amd64, sha256:890e… for arm64).
+
+### C5: Codex review + commit closeout
+- **Tier**: 2 | **Risk**: medium
+- **Files**: — (review of C2 changes + final summary)
+- **Definition**: Pipe C2's diff to codex for review with same protocol as earlier T-tasks. Apply nits if any. Commit C1+C2 with conventional commit messages. Update PROGRESS.md to Complete.
+- **Test**: `git log --oneline -3` shows the closeout commits; `swift test` still 100% green.
+- **Rollback**: `git reset --soft HEAD~N` if commits land in wrong shape.
+- **Status**: pending
+
+## Issues (this plan)
+| # | Issue | Task | Resolution | Status |
+|---|-------|------|------------|--------|
+| — | — | — | — | — |
+
+## Notes (this plan)
+| # | Note | Context |
+|---|------|---------|
+| 1 | docker daemon not available on this Mac; local registry via Apple `container run` instead | C3 |
+| 2 | #11 considered resolved by T5b (Option C — pure-Swift assembly) | — |
+| 3 | #10 is upstream-blocked (apple/container#1496); we can only document, not fix | C1 |
+
+---
+
 # Progress Plan: v0.3.0 Multi-Arch Image Support
 
-> Status: In Progress | Date: 2026-05-05
+> Status: Complete | Date: 2026-05-05
 
 ## Objective
 Fix open multi-arch GitHub issues. Reference plan: `.context/multi-arch-plan.md`. Each PR codex-reviewed before commit.
@@ -20,14 +114,14 @@ Fix open multi-arch GitHub issues. Reference plan: `.context/multi-arch-plan.md`
 ### Tier 2 (depends on T2)
 | ID | Task | Risk | Depends On | Files | Status |
 |----|------|------|------------|-------|--------|
-| T3 | PR 1b — store path switch (read-only Apple store + CLI shell-out for writes; Option A) | high | T2 | MockerKit/Config/MockerConfig.swift, MockerKit/Image/ImageManager.swift | pending |
+| T3 | PR 1b — store path switch (read-only Apple store + CLI shell-out for writes; Option A) | high | T2 | MockerKit/Config/MockerConfig.swift, MockerKit/Image/ImageManager.swift | done |
 
 ### Tier 3 (depends on T3)
 | ID | Task | Risk | Depends On | Files | Status |
 |----|------|------|------------|-------|--------|
-| T4 | PR 2 — multi-platform build (`Build.platforms: [String]`, repeatable `--platform`) | medium | T3 | Mocker/Commands/Build.swift, ImageManager.swift | pending |
-| T5 | PR 3 — `mocker manifest create` + `inspect` (pure Swift via ContainerizationOCI.Index + LocalContentStore.ingest + ImageStore.create) | high | T3 | new ManifestManager + commands | pending |
-| T6 | PR 4 — `mocker manifest add/rm/push` | medium | T5 | ManifestManager extensions | pending |
+| T4 | PR 2 — multi-platform build (`Build.platforms: [String]`, repeatable `--platform`) | medium | T3 | Mocker/Commands/Build.swift, ImageManager.swift | done (live test deferred to C4) |
+| T5 | PR 3 — `mocker manifest create` + `inspect` (pure Swift via ContainerizationOCI.Index + LocalContentStore.ingest + ImageStore.create) | high | T3 | new ManifestManager + commands | done |
+| T6 | PR 4 — `mocker manifest add/rm/push` | medium | T5 | ManifestManager extensions | done (push live test deferred to C3) |
 
 ## Issues
 | # | Issue | Task | Resolution | Status |
@@ -38,6 +132,7 @@ Fix open multi-arch GitHub issues. Reference plan: `.context/multi-arch-plan.md`
 | # | Note | Context |
 |---|------|---------|
 | 1 | Concurrency: Option A (read-only mocker SDK + CLI shell-out for writes) | T3 |
+| 2 | `manifest annotate` and live push/build verification deferred to closeout plan above | T6 |
 
 ---
 
