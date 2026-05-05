@@ -37,6 +37,14 @@ Your existing `docker-compose.yml` works as-is.
 
 ## What's New
 
+### v0.3.0 — Multi-arch images
+- **`mocker manifest`** subcommand group — `create`, `inspect`, `add`, `rm`, `annotate`, `push` for assembling and publishing OCI image indexes (multi-arch manifest lists). Pure-Swift via Containerization, no skopeo required (closes #9, #11)
+- **Multi-platform builds** — `mocker build --platform linux/amd64 --platform linux/arm64 -t img:tag .` produces a single multi-arch image
+- **`--platform` wired through `pull`/`push`** — hardcoded `arm64` removed; specify any supported platform
+- **Apple container CLI store auto-detection** — mocker reads from `~/Library/Application Support/com.apple.container/` by default
+- **BREAKING**: `MockerKit` consumers calling `ImageManager.build(platform:)` must migrate to `build(platforms:)`
+- Exotic architectures (ppc64le, s390x, riscv64) — layer-only Dockerfiles work; `RUN` steps blocked upstream by [apple/container#1496](https://github.com/apple/container/issues/1496) — see "Building for exotic architectures"
+
 ### v0.2.1 — Nested virtualization
 - **`--virtualization` / `--kernel`** for `mocker run` and `mocker create` — expose nested virtualization to containers (closes #4)
 
